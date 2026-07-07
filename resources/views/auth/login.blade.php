@@ -1,63 +1,66 @@
 <x-guest-layout>
-    <div class="mb-8">
-        <h1 class="text-2xl font-semibold tracking-tight text-gray-900">Log in to {{ config('app.name') }}</h1>
-        <p class="mt-2 text-sm text-gray-500">Welcome back. Enter your details to continue.</p>
+    <div class="auth-head">
+        <h1>Log in</h1>
+        <p>Welcome back. Enter your details to continue.</p>
     </div>
 
-    <x-auth-session-status class="mb-4" :status="session('status')" />
+    @if (session('status'))
+        <div class="alert alert-ok" role="status" style="margin-top:24px;">
+            <x-lucide name="circle-check" />
+            <span>{{ session('status') }}</span>
+        </div>
+    @endif
 
-    <form method="POST" action="{{ route('login') }}" class="space-y-5"
-          x-data="{ show: false }">
+    @if ($errors->any())
+        <div class="alert" role="alert" style="margin-top:24px;">
+            <x-lucide name="alert-circle" />
+            <span>{{ $errors->first() }}</span>
+        </div>
+    @endif
+
+    <form method="POST" action="{{ route('login') }}" class="form" novalidate data-auth-form>
         @csrf
 
-        {{-- Email --}}
-        <div>
-            <label for="email" class="form-label">Email</label>
-            <input id="email" name="email" type="email" value="{{ old('email') }}" required autofocus
-                   autocomplete="username" placeholder="you@example.com" class="form-input" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
+        <div class="field" data-field="email">
+            <div class="field-label-row">
+                <label for="email">Email</label>
+            </div>
+            <div class="input-wrap">
+                <input id="email" name="email" type="email" value="{{ old('email') }}" required autofocus
+                       autocomplete="email" placeholder="you@example.com" class="input" data-validate="email">
+            </div>
+            <p class="field-error" data-error><x-lucide name="alert-circle" /> <span></span></p>
         </div>
 
-        {{-- Password (with show/hide) --}}
-        <div>
-            <div class="flex items-center justify-between">
-                <label for="password" class="form-label">Password</label>
+        <div class="field" data-field="password">
+            <div class="field-label-row">
+                <label for="password">Password</label>
                 @if (Route::has('password.request'))
-                    <a href="{{ route('password.request') }}" class="mb-1 text-xs font-medium text-gray-500 hover:text-gray-900">Forgot password?</a>
+                    <a href="{{ route('password.request') }}" class="field-forgot">Forgot password?</a>
                 @endif
             </div>
-            <div class="relative">
-                <input id="password" name="password" required autocomplete="current-password"
-                       placeholder="Your password"
-                       class="form-input pr-11"
-                       :type="show ? 'text' : 'password'" />
-                <button type="button" tabindex="-1"
-                        @click="show = !show"
-                        :aria-label="show ? 'Hide password' : 'Show password'"
-                        class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition hover:text-gray-700 focus:outline-none">
-                    <x-icon name="eye" class="h-5 w-5" x-show="!show" />
-                    <x-icon name="eye-slash" class="h-5 w-5" x-show="show" x-cloak />
+            <div class="input-wrap">
+                <input id="password" name="password" type="password" required autocomplete="current-password"
+                       placeholder="Your password" class="input has-toggle" data-validate="required">
+                <button type="button" class="pw-toggle" data-pw-toggle aria-pressed="false" aria-label="Show password">
+                    <x-lucide name="eye" class="lucide i-show" />
+                    <x-lucide name="eye-off" class="lucide i-hide" />
                 </button>
             </div>
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
+            <p class="field-error" data-error><x-lucide name="alert-circle" /> <span></span></p>
         </div>
 
-        {{-- Remember me --}}
-        <label for="remember_me" class="inline-flex items-center">
-            <input id="remember_me" type="checkbox" name="remember"
-                   class="rounded border-gray-300 text-gray-900 shadow-sm focus:ring-gray-900">
-            <span class="ms-2 text-sm text-gray-600">Remember me</span>
+        <label class="check">
+            <input type="checkbox" name="remember">
+            <span class="box"><x-lucide name="check" /></span>
+            Remember me
         </label>
 
         <x-recaptcha />
 
-        <button type="submit" class="btn-primary w-full py-2.5 text-sm shadow-sm">Log in</button>
-
-        @if(config('inboxpilot.registration_open'))
-            <p class="text-center text-sm text-gray-600">
-                Need an account?
-                <a href="{{ route('register') }}" class="font-medium text-gray-900 hover:underline">Register</a>
-            </p>
-        @endif
+        <button type="submit" class="btn btn-accent btn-block auth-submit" data-submit>
+            <span class="label-default">Log in</span>
+            <span class="label-loading" hidden><span class="spinner"></span> Authenticating…</span>
+        </button>
     </form>
 </x-guest-layout>

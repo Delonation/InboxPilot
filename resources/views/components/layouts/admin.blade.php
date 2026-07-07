@@ -1,4 +1,38 @@
 @props(['title' => null])
+
+@php
+    use App\Models\User;
+    $me = auth()->user();
+    $pendingCount = User::where('role', User::ROLE_USER)->where('status', User::STATUS_PENDING)->count();
+
+    $setting = $me->smtpSetting;
+    if ($setting) {
+        $smtpConnected = true;
+        $smtpOk = empty($setting->last_test_error);
+    } else {
+        $smtpConnected = (bool) config('mail.mailers.smtp.host');
+        $smtpOk = true;
+    }
+
+    $nav = [
+        [null, [
+            ['admin.dashboard', 'dashboard', 'Dashboard', 'admin.dashboard'],
+        ]],
+        ['Campaigns', [
+            ['admin.logs.campaigns', 'send', 'Campaign logs', 'admin.logs.campaigns'],
+        ]],
+        ['Deliverability', [
+            ['admin.logs.smtp', 'server', 'SMTP logs', 'admin.logs.smtp'],
+            ['admin.logs.system', 'list', 'System logs', 'admin.logs.system'],
+        ]],
+        ['Admin', [
+            ['admin.users.pending', 'user-check', 'Approvals', 'admin.users.pending', 'pending'],
+            ['admin.users.index', 'users', 'Users', 'admin.users.index'],
+            ['admin.settings.edit', 'settings', 'Settings', 'admin.settings.*'],
+        ]],
+    ];
+@endphp
+
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
@@ -7,82 +41,122 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ? $title.' · ' : '' }}Admin · {{ config('app.name') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('partials.admin-head')
 </head>
-<body class="font-sans">
-    @php($user = auth()->user())
-    <div x-data="{ sidebarOpen: false }" class="min-h-screen">
+<body>
+<div class="admin" :class="{ 'is-collapsed': collapsed, 'is-drawer': drawer }"
+     x-data="{ collapsed: false, drawer: false }" @keydown.window.escape="drawer = false">
 
-        <div x-show="sidebarOpen" x-cloak @click="sidebarOpen = false"
-             class="fixed inset-0 z-30 bg-gray-900/40 lg:hidden"></div>
+    <div class="scrim" @click="drawer = false"></div>
 
-        <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
-               class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-gray-200 bg-gray-900 transition-transform lg:translate-x-0">
-            <div class="flex h-16 items-center gap-2 border-b border-white/10 px-5">
-                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-white text-gray-900">
-                    <x-icon name="shield" class="h-4 w-4" />
-                </span>
-                <span class="text-base font-semibold text-white">{{ config('app.name') }} Admin</span>
-            </div>
+    {{-- ── Sidebar ─────────────────────────────────────────────────── --}}
+    <aside class="side">
+        <a href="{{ route('admin.dashboard') }}" class="side-brand">
+            <img src="{{ asset('Logo_inbox_flight.png') }}" alt="">
+            <b>{{ config('app.name') }}</b>
+            <span class="tag">Admin</span>
+        </a>
 
-            <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4 text-gray-300">
-                @foreach([
-                    ['admin.dashboard', 'home', 'Overview', 'admin.dashboard'],
-                    ['admin.users.pending', 'clock', 'Pending users', 'admin.users.pending'],
-                    ['admin.users.index', 'users', 'All users', 'admin.users.index'],
-                    ['admin.logs.campaigns', 'send', 'Campaign logs', 'admin.logs.campaigns'],
-                    ['admin.logs.smtp', 'server', 'SMTP logs', 'admin.logs.smtp'],
-                    ['admin.logs.system', 'list', 'System logs', 'admin.logs.system'],
-                    ['admin.settings.edit', 'cog', 'Settings', 'admin.settings.*'],
-                ] as [$route, $icon, $label, $pattern])
-                    <a href="{{ route($route) }}"
-                       class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition
-                              {{ request()->routeIs($pattern) ? 'bg-white text-gray-900' : 'text-gray-300 hover:bg-white/10 hover:text-white' }}">
-                        <x-icon :name="$icon" class="h-5 w-5 shrink-0" />
-                        <span>{{ $label }}</span>
-                    </a>
-                @endforeach
-            </nav>
-
-            <div class="border-t border-white/10 p-3">
-                <a href="{{ route('dashboard') }}" class="flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium text-gray-300 hover:bg-white/10 hover:text-white">
-                    <x-icon name="chevron-right" class="h-5 w-5" /> Back to app
-                </a>
-            </div>
-        </aside>
-
-        <div class="lg:pl-64">
-            <header class="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 sm:px-6">
-                <div class="flex items-center gap-3">
-                    <button @click="sidebarOpen = true" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden">
-                        <x-icon name="menu" class="h-5 w-5" />
-                    </button>
-                    <h2 class="text-sm font-semibold text-gray-900 sm:text-base">{{ $title ?? 'Admin' }}</h2>
+        <nav class="side-nav">
+            @foreach ($nav as [$section, $items])
+                <div class="side-section">
+                    @if ($section)<p class="side-section-label">{{ $section }}</p>@endif
+                    @foreach ($items as $item)
+                        @php [$route, $icon, $label, $pattern] = $item; $badge = $item[4] ?? null; @endphp
+                        <a href="{{ route($route) }}" data-tip="{{ $label }}"
+                           class="side-item {{ request()->routeIs($pattern) ? 'active' : '' }}">
+                            <x-lucide :name="$icon" />
+                            <span class="label">{{ $label }}</span>
+                            @if ($badge === 'pending' && $pendingCount > 0)
+                                <span class="side-badge">{{ $pendingCount }}</span>
+                            @endif
+                        </a>
+                    @endforeach
                 </div>
-                <div x-data="{ open: false }" class="relative">
-                    <button @click="open = !open" class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100">
-                        <span class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white">
-                            {{ strtoupper(substr($user->name, 0, 1)) }}
-                        </span>
-                        <span class="hidden sm:inline">{{ $user->name }}</span>
+            @endforeach
+        </nav>
+
+        <div class="side-foot">
+            <a href="{{ route('dashboard') }}" data-tip="User dashboard" class="side-item">
+                <x-lucide name="dashboard" />
+                <span class="label">User dashboard</span>
+            </a>
+        </div>
+    </aside>
+
+    {{-- ── Main ────────────────────────────────────────────────────── --}}
+    <div class="main">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="icon-btn hamburger" @click="drawer = true" aria-label="Open menu"><x-lucide name="menu" /></button>
+                <button class="icon-btn collapse-btn" @click="collapsed = !collapsed" aria-label="Collapse sidebar"><x-lucide name="panel-left" /></button>
+                <h1>{{ $title ?? 'Dashboard' }}</h1>
+            </div>
+
+            <div class="topbar-right">
+                <span class="smtp-pill {{ $smtpConnected && $smtpOk ? '' : ($smtpConnected ? 'bad' : 'bad') }}">
+                    <span class="d"></span>
+                    {{ $smtpConnected ? ($smtpOk ? 'SMTP connected' : 'SMTP failing') : 'No SMTP' }}
+                </span>
+
+                <a href="{{ route('admin.users.pending') }}" class="icon-btn" aria-label="Pending approvals">
+                    <x-lucide name="bell" />
+                    @if ($pendingCount > 0)<span class="bell-badge">{{ $pendingCount }}</span>@endif
+                </a>
+
+                <div style="position:relative" x-data="{ open: false }" @keydown.escape="open = false">
+                    <button class="avatar-btn" @click="open = !open" :aria-expanded="open" aria-haspopup="menu">
+                        <span class="avatar">{{ strtoupper(substr($me->name, 0, 1)) }}</span>
+                        <span class="avatar-name">{{ \Illuminate\Support\Str::limit($me->name, 14) }}</span>
                     </button>
-                    <div x-show="open" x-cloak @click.outside="open = false"
-                         class="absolute right-0 mt-2 w-44 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
+                    <div class="dropdown" x-show="open" x-cloak @click.outside="open = false" role="menu"
+                         x-transition:enter="transition ease-out duration-[120ms]"
+                         x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-[90ms]"
+                         x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95">
+                        @if (Route::has('profile.edit'))
+                            <a href="{{ route('profile.edit') }}" role="menuitem"><x-lucide name="user" /> Profile</a>
+                        @endif
+                        <a href="{{ route('admin.settings.edit') }}" role="menuitem"><x-lucide name="settings" /> Settings</a>
+                        <div class="sep"></div>
                         <form method="POST" action="{{ route('logout') }}">
                             @csrf
-                            <button type="submit" class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">Log out</button>
+                            <button type="submit" role="menuitem"><x-lucide name="log-out" /> Log out</button>
                         </form>
                     </div>
                 </div>
-            </header>
+            </div>
+        </header>
 
-            <main class="px-4 py-6 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-7xl">
-                    <x-flash />
-                    {{ $slot }}
-                </div>
-            </main>
-        </div>
+        <main class="content">
+            <div class="content-wrap">
+                {{ $slot }}
+            </div>
+        </main>
     </div>
-    @stack('scripts')
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+
+<script>
+    // Toast helper shared by admin pages
+    window.adminToast = function (message, type) {
+        const wrap = document.getElementById('toasts');
+        if (!wrap) return;
+        while (wrap.children.length >= 3) wrap.removeChild(wrap.firstChild);
+        const el = document.createElement('div');
+        el.className = 'toast' + (type === 'error' ? ' err' : '');
+        el.setAttribute('role', 'status');
+        el.innerHTML = '<svg class="lucide" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+            + (type === 'error'
+                ? '<circle cx="12" cy="12" r="10"/><line x1="12" x2="12" y1="8" y2="12"/><line x1="12" x2="12.01" y1="16" y2="16"/>'
+                : '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>')
+            + '</svg><span></span>';
+        el.querySelector('span').textContent = message;
+        wrap.appendChild(el);
+        setTimeout(() => { el.style.transition = 'opacity .3s ease'; el.style.opacity = '0'; setTimeout(() => el.remove(), 300); }, 4000);
+    };
+</script>
+@stack('scripts')
 </body>
 </html>

@@ -1,103 +1,89 @@
 <x-guest-layout>
-    <div class="mb-8">
-        <h1 class="text-2xl font-semibold tracking-tight text-gray-900">Create your account</h1>
-        <p class="mt-2 text-sm text-gray-500">
-            Free to register. An admin approves new accounts before sending.
-        </p>
-    </div>
-
-    <form method="POST" action="{{ route('register') }}" class="space-y-5"
-          x-data="{ pw: '', show: false, showConfirm: false }">
-        @csrf
-
-        {{-- Name --}}
-        <div>
-            <label for="name" class="form-label">Name</label>
-            <input id="name" name="name" type="text" value="{{ old('name') }}" required autofocus
-                   autocomplete="name" placeholder="Jane Doe" class="form-input" />
-            <x-input-error :messages="$errors->get('name')" class="mt-2" />
+    @if (session('registered'))
+        {{-- In-place success state --}}
+        <div class="auth-success">
+            <span class="big-check"><x-lucide name="circle-check" /></span>
+            <h1>Account created</h1>
+            <p class="line"><span class="c">250 OK:</span> awaiting admin approval before you can send.</p>
+            <a href="{{ route('login') }}" class="btn btn-accent btn-block auth-submit" style="margin-top:26px;">Go to login</a>
+        </div>
+    @else
+        <div class="auth-head">
+            <h1>Create your account</h1>
+            <p>Free to register. An admin approves new accounts before sending.</p>
         </div>
 
-        {{-- Email --}}
-        <div>
-            <label for="email" class="form-label">Email</label>
-            <input id="email" name="email" type="email" value="{{ old('email') }}" required
-                   autocomplete="username" placeholder="you@example.com" class="form-input" />
-            <x-input-error :messages="$errors->get('email')" class="mt-2" />
-        </div>
-
-        {{-- Password (with show/hide + strength meter) --}}
-        <div>
-            <label for="password" class="form-label">Password</label>
-            <div class="relative">
-                <input id="password" name="password" required autocomplete="new-password"
-                       placeholder="At least 8 characters"
-                       class="form-input pr-11"
-                       x-model="pw"
-                       :type="show ? 'text' : 'password'" />
-                <button type="button" tabindex="-1"
-                        @click="show = !show"
-                        :aria-label="show ? 'Hide password' : 'Show password'"
-                        class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition hover:text-gray-700 focus:outline-none">
-                    <x-icon name="eye" class="h-5 w-5" x-show="!show" />
-                    <x-icon name="eye-slash" class="h-5 w-5" x-show="show" x-cloak />
-                </button>
+        @if ($errors->any())
+            <div class="alert" role="alert" style="margin-top:24px;">
+                <x-lucide name="alert-circle" />
+                <span>{{ $errors->first() }}</span>
             </div>
+        @endif
 
-            {{-- strength meter --}}
-            <div x-cloak x-show="pw.length > 0" class="mt-2"
-                 x-data="{
-                    get score() {
-                        let s = 0;
-                        if (this.pw.length >= 8) s++;
-                        if (/[A-Z]/.test(this.pw) && /[a-z]/.test(this.pw)) s++;
-                        if (/\d/.test(this.pw)) s++;
-                        if (/[^A-Za-z0-9]/.test(this.pw)) s++;
-                        return s;
-                    },
-                    get label() { return ['Too weak','Weak','Fair','Good','Strong'][this.score]; },
-                    get color() { return ['bg-red-400','bg-red-400','bg-amber-400','bg-blue-500','bg-green-500'][this.score]; }
-                 }">
-                <div class="flex gap-1.5">
-                    <template x-for="i in 4" :key="i">
-                        <span class="h-1.5 flex-1 rounded-full transition-colors duration-300"
-                              :class="i <= score ? color : 'bg-gray-200'"></span>
-                    </template>
+        <form method="POST" action="{{ route('register') }}" class="form" novalidate data-auth-form>
+            @csrf
+
+            <div class="field" data-field="name">
+                <div class="field-label-row"><label for="name">Name</label></div>
+                <div class="input-wrap">
+                    <input id="name" name="name" type="text" value="{{ old('name') }}" required autofocus
+                           autocomplete="name" placeholder="Jane Doe" class="input" data-validate="required">
                 </div>
-                <p class="mt-1 text-xs text-gray-500" x-text="label"></p>
+                <p class="field-error" data-error><x-lucide name="alert-circle" /> <span></span></p>
             </div>
 
-            <x-input-error :messages="$errors->get('password')" class="mt-2" />
-        </div>
-
-        {{-- Confirm password (with show/hide) --}}
-        <div>
-            <label for="password_confirmation" class="form-label">Confirm password</label>
-            <div class="relative">
-                <input id="password_confirmation" name="password_confirmation" required
-                       autocomplete="new-password" placeholder="Re-enter your password"
-                       class="form-input pr-11"
-                       :type="showConfirm ? 'text' : 'password'" />
-                <button type="button" tabindex="-1"
-                        @click="showConfirm = !showConfirm"
-                        :aria-label="showConfirm ? 'Hide password' : 'Show password'"
-                        class="absolute inset-y-0 right-0 flex items-center pr-3 text-gray-400 transition hover:text-gray-700 focus:outline-none">
-                    <x-icon name="eye" class="h-5 w-5" x-show="!showConfirm" />
-                    <x-icon name="eye-slash" class="h-5 w-5" x-show="showConfirm" x-cloak />
-                </button>
+            <div class="field" data-field="email">
+                <div class="field-label-row"><label for="email">Email</label></div>
+                <div class="input-wrap">
+                    <input id="email" name="email" type="email" value="{{ old('email') }}" required
+                           autocomplete="email" placeholder="you@example.com" class="input" data-validate="email">
+                </div>
+                <p class="field-error" data-error><x-lucide name="alert-circle" /> <span></span></p>
             </div>
-            <x-input-error :messages="$errors->get('password_confirmation')" class="mt-2" />
-        </div>
 
-        <x-recaptcha />
+            <div class="field" data-field="password">
+                <div class="field-label-row"><label for="password">Password</label></div>
+                <div class="input-wrap">
+                    <input id="password" name="password" type="password" required autocomplete="new-password"
+                           placeholder="At least 8 characters" class="input has-toggle"
+                           data-validate="required" data-password>
+                    <button type="button" class="pw-toggle" data-pw-toggle aria-pressed="false" aria-label="Show password">
+                        <x-lucide name="eye" class="lucide i-show" />
+                        <x-lucide name="eye-off" class="lucide i-hide" />
+                    </button>
+                </div>
+                <div class="pw-meter" data-strength style="display:none;">
+                    <div class="pw-meter-bar">
+                        <span class="pw-meter-seg"></span>
+                        <span class="pw-meter-seg"></span>
+                        <span class="pw-meter-seg"></span>
+                    </div>
+                    <p class="pw-meter-cap" data-cap></p>
+                </div>
+                <p class="field-error" data-error><x-lucide name="alert-circle" /> <span></span></p>
+            </div>
 
-        <button type="submit" class="btn-primary w-full py-2.5 text-sm shadow-sm">
-            Create account
-        </button>
+            <div class="field" data-field="password_confirmation">
+                <div class="field-label-row"><label for="password_confirmation">Confirm password</label></div>
+                <div class="input-wrap">
+                    <input id="password_confirmation" name="password_confirmation" type="password" required
+                           autocomplete="new-password" placeholder="Re-enter your password"
+                           class="input has-toggle" data-validate="confirm">
+                    <span class="confirm-ok" data-confirm-ok aria-hidden="true"><x-lucide name="circle-check" /></span>
+                    <button type="button" class="pw-toggle" data-pw-toggle aria-pressed="false" aria-label="Show password">
+                        <x-lucide name="eye" class="lucide i-show" />
+                        <x-lucide name="eye-off" class="lucide i-hide" />
+                    </button>
+                </div>
+                <p class="field-error" data-error><x-lucide name="alert-circle" /> <span></span></p>
+            </div>
 
-        <p class="text-center text-sm text-gray-600">
-            Already registered?
-            <a href="{{ route('login') }}" class="font-medium text-gray-900 hover:underline">Log in</a>
-        </p>
-    </form>
+            <x-recaptcha />
+
+            <button type="submit" class="btn btn-accent btn-block auth-submit" data-submit>
+                <span class="label-default">Create account</span>
+                <span class="label-loading" hidden><span class="spinner"></span> Creating account…</span>
+            </button>
+        </form>
+    @endif
 </x-guest-layout>

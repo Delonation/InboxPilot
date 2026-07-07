@@ -1,4 +1,28 @@
 @props(['title' => null])
+
+@php
+    $me = auth()->user();
+    $smtpReady = $me->smtpReady();
+
+    $nav = [
+        [null, [
+            ['dashboard', 'dashboard', 'Dashboard', 'dashboard'],
+        ]],
+        ['Audience', [
+            ['contacts.index', 'users', 'Contacts', 'contacts.*'],
+        ]],
+        ['Campaigns', [
+            ['templates.index', 'file-text', 'Templates', 'templates.*'],
+            ['campaigns.index', 'send', 'Campaigns', 'campaigns.*'],
+        ]],
+        ['Deliverability', [
+            ['smtp.edit', 'server', 'SMTP settings', 'smtp.*'],
+            ['domain-health.index', 'globe', 'Domain health', 'domain-health.*'],
+            ['logs.index', 'list', 'Activity log', 'logs.*'],
+        ]],
+    ];
+@endphp
+
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}">
 <head>
@@ -7,94 +31,109 @@
     <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>{{ $title ? $title.' · ' : '' }}{{ config('app.name') }}</title>
     @vite(['resources/css/app.css', 'resources/js/app.js'])
+    @include('partials.admin-head')
 </head>
-<body class="font-sans">
-    @php($user = auth()->user())
-    <div x-data="{ sidebarOpen: false }" class="min-h-screen">
+<body>
+<div class="admin" :class="{ 'is-collapsed': collapsed, 'is-drawer': drawer }"
+     x-data="{ collapsed: false, drawer: false }" @keydown.window.escape="drawer = false">
 
-        {{-- Mobile backdrop --}}
-        <div x-show="sidebarOpen" x-cloak @click="sidebarOpen = false"
-             class="fixed inset-0 z-30 bg-gray-900/40 lg:hidden"></div>
+    <div class="scrim" @click="drawer = false"></div>
 
-        {{-- Sidebar --}}
-        <aside :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
-               class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-gray-200 bg-white transition-transform lg:translate-x-0">
-            <div class="flex h-16 items-center gap-2 border-b border-gray-100 px-5">
-                <span class="flex h-8 w-8 items-center justify-center rounded-lg bg-gray-900 text-white">
-                    <x-icon name="send" class="h-4 w-4" />
-                </span>
-                <span class="text-base font-semibold text-gray-900">{{ config('app.name') }}</span>
-            </div>
+    {{-- Sidebar --}}
+    <aside class="side">
+        <a href="{{ route('dashboard') }}" class="side-brand">
+            <img src="{{ asset('Logo_inbox_flight.png') }}" alt="">
+            <b>{{ config('app.name') }}</b>
+        </a>
 
-            <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-4">
-                <x-nav-item href="{{ route('dashboard') }}" icon="home" :active="request()->routeIs('dashboard')">Dashboard</x-nav-item>
-
-                @unless($user->canSend())
-                    <x-nav-item href="{{ route('setup.index') }}" icon="wrench" :active="request()->routeIs('setup.*')">Setup</x-nav-item>
-                @endunless
-
-                <p class="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Audience</p>
-                <x-nav-item href="{{ route('contacts.index') }}" icon="contacts" :active="request()->routeIs('contacts.*')">Contacts</x-nav-item>
-
-                <p class="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Campaigns</p>
-                <x-nav-item href="{{ route('templates.index') }}" icon="document" :active="request()->routeIs('templates.*')">Templates</x-nav-item>
-                <x-nav-item href="{{ route('campaigns.index') }}" icon="send" :active="request()->routeIs('campaigns.*')">Campaigns</x-nav-item>
-
-                <p class="px-3 pb-1 pt-4 text-xs font-semibold uppercase tracking-wide text-gray-400">Deliverability</p>
-                <x-nav-item href="{{ route('smtp.edit') }}" icon="server" :active="request()->routeIs('smtp.*')">SMTP settings</x-nav-item>
-                <x-nav-item href="{{ route('domain-health.index') }}" icon="globe" :active="request()->routeIs('domain-health.*')">Domain health</x-nav-item>
-                <x-nav-item href="{{ route('logs.index') }}" icon="list" :active="request()->routeIs('logs.*')">Activity log</x-nav-item>
-            </nav>
-
-            <div class="border-t border-gray-100 p-3">
-                <x-nav-item href="{{ route('profile.edit') }}" icon="cog" :active="request()->routeIs('profile.*')">Settings</x-nav-item>
-            </div>
-        </aside>
-
-        {{-- Main column --}}
-        <div class="lg:pl-64">
-            <header class="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-gray-200 bg-white/90 px-4 backdrop-blur sm:px-6">
-                <div class="flex items-center gap-3">
-                    <button @click="sidebarOpen = true" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100 lg:hidden">
-                        <x-icon name="menu" class="h-5 w-5" />
-                    </button>
-                    <h2 class="text-sm font-semibold text-gray-900 sm:text-base">{{ $title ?? 'Dashboard' }}</h2>
+        <nav class="side-nav">
+            @unless ($me->canSend())
+                <div class="side-section">
+                    <a href="{{ route('setup.index') }}" data-tip="Setup"
+                       class="side-item {{ request()->routeIs('setup.*') ? 'active' : '' }}">
+                        <x-lucide name="wrench" />
+                        <span class="label">Finish setup</span>
+                    </a>
                 </div>
+            @endunless
 
-                <div class="flex items-center gap-3">
-                    @if($user->smtpReady())
-                        <span class="badge-green hidden sm:inline-flex"><x-icon name="check" class="h-3 w-3" /> SMTP connected</span>
-                    @else
-                        <span class="badge-amber hidden sm:inline-flex"><x-icon name="warning" class="h-3 w-3" /> SMTP not set up</span>
-                    @endif
+            @foreach ($nav as [$section, $items])
+                <div class="side-section">
+                    @if ($section)<p class="side-section-label">{{ $section }}</p>@endif
+                    @foreach ($items as [$route, $icon, $label, $pattern])
+                        <a href="{{ route($route) }}" data-tip="{{ $label }}"
+                           class="side-item {{ request()->routeIs($pattern) ? 'active' : '' }}">
+                            <x-lucide :name="$icon" />
+                            <span class="label">{{ $label }}</span>
+                        </a>
+                    @endforeach
+                </div>
+            @endforeach
+        </nav>
 
-                    <div x-data="{ open: false }" class="relative">
-                        <button @click="open = !open" class="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-100">
-                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-gray-900 text-xs font-semibold text-white">
-                                {{ strtoupper(substr($user->name, 0, 1)) }}
-                            </span>
-                            <span class="hidden sm:inline">{{ $user->name }}</span>
-                        </button>
-                        <div x-show="open" x-cloak @click.outside="open = false"
-                             class="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200 bg-white py-1 shadow-lg">
-                            <a href="{{ route('profile.edit') }}" class="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-50">Profile &amp; settings</a>
-                            <form method="POST" action="{{ route('logout') }}">
-                                @csrf
-                                <button type="submit" class="block w-full px-4 py-2 text-left text-sm text-gray-700 hover:bg-gray-50">Log out</button>
-                            </form>
-                        </div>
+        <div class="side-foot">
+            @if ($me->isAdmin())
+                <a href="{{ route('admin.dashboard') }}" data-tip="Admin panel" class="side-item">
+                    <x-lucide name="user-check" />
+                    <span class="label">Admin panel</span>
+                </a>
+            @endif
+            <a href="{{ route('profile.edit') }}" data-tip="Settings"
+               class="side-item {{ request()->routeIs('profile.*') ? 'active' : '' }}">
+                <x-lucide name="settings" />
+                <span class="label">Settings</span>
+            </a>
+        </div>
+    </aside>
+
+    {{-- Main --}}
+    <div class="main">
+        <header class="topbar">
+            <div class="topbar-left">
+                <button class="icon-btn hamburger" @click="drawer = true" aria-label="Open menu"><x-lucide name="menu" /></button>
+                <button class="icon-btn collapse-btn" @click="collapsed = !collapsed" aria-label="Collapse sidebar"><x-lucide name="panel-left" /></button>
+                <h1>{{ $title ?? 'Dashboard' }}</h1>
+            </div>
+
+            <div class="topbar-right">
+                <a href="{{ route('smtp.edit') }}" class="smtp-pill {{ $smtpReady ? '' : 'bad' }}">
+                    <span class="d"></span>{{ $smtpReady ? 'SMTP connected' : 'SMTP not set up' }}
+                </a>
+
+                <div style="position:relative" x-data="{ open: false }" @keydown.escape="open = false">
+                    <button class="avatar-btn" @click="open = !open" :aria-expanded="open" aria-haspopup="menu">
+                        <span class="avatar">{{ strtoupper(substr($me->name, 0, 1)) }}</span>
+                        <span class="avatar-name">{{ \Illuminate\Support\Str::limit($me->name, 14) }}</span>
+                    </button>
+                    <div class="dropdown" x-show="open" x-cloak @click.outside="open = false" role="menu"
+                         x-transition:enter="transition ease-out duration-[120ms]"
+                         x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+                         x-transition:leave="transition ease-in duration-[90ms]"
+                         x-transition:leave-start="opacity-100 scale-100" x-transition:leave-end="opacity-0 scale-95">
+                        <a href="{{ route('profile.edit') }}" role="menuitem"><x-lucide name="user" /> Profile &amp; settings</a>
+                        @if ($me->isAdmin())
+                            <a href="{{ route('admin.dashboard') }}" role="menuitem"><x-lucide name="dashboard" /> Admin</a>
+                        @endif
+                        <div class="sep"></div>
+                        <form method="POST" action="{{ route('logout') }}">
+                            @csrf
+                            <button type="submit" role="menuitem"><x-lucide name="log-out" /> Log out</button>
+                        </form>
                     </div>
                 </div>
-            </header>
+            </div>
+        </header>
 
-            <main class="px-4 py-6 sm:px-6 lg:px-8">
-                <div class="mx-auto max-w-7xl">
-                    <x-flash />
-                    {{ $slot }}
-                </div>
-            </main>
-        </div>
+        <main class="content">
+            <div class="content-wrap">
+                <x-flash />
+                {{ $slot }}
+            </div>
+        </main>
     </div>
-    @stack('scripts')
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+@stack('scripts')
 </body>
 </html>

@@ -17,7 +17,7 @@ class RegistrationTest extends TestCase
         $response->assertStatus(200);
     }
 
-    public function test_new_users_register_as_pending_and_see_the_waiting_screen(): void
+    public function test_new_users_register_as_pending_and_see_the_confirmation(): void
     {
         $response = $this->post('/register', [
             'name' => 'Test User',
@@ -26,8 +26,11 @@ class RegistrationTest extends TestCase
             'password_confirmation' => 'password',
         ]);
 
-        $this->assertAuthenticated();
-        $response->assertRedirect(route('status.pending'));
+        // New accounts are not logged in; they see an in-place confirmation and
+        // must wait for admin approval before they can log in and send.
+        $this->assertGuest();
+        $response->assertRedirect(route('register'));
+        $response->assertSessionHas('registered', true);
 
         $user = User::where('email', 'test@example.com')->first();
         $this->assertSame(User::STATUS_PENDING, $user->status);

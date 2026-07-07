@@ -2,7 +2,7 @@
     <x-page-header title="Settings" subtitle="Operator controls for this InboxPilot instance." />
 
     <div class="max-w-2xl space-y-6">
-        <x-card title="Registration &amp; access">
+        <x-card title="Registration & access">
             <form method="POST" action="{{ route('admin.settings.update') }}" class="space-y-5">
                 @csrf
                 @method('PUT')

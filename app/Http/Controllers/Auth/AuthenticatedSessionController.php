@@ -42,7 +42,14 @@ class AuthenticatedSessionController extends Controller
         ActivityLogger::user($user->id, 'logged_in');
 
         if ($user->isAdmin()) {
-            return redirect()->intended(route('admin.dashboard'));
+            // Admins always land on the admin dashboard — unless they were
+            // deep-linking to a specific admin page before logging in.
+            $intended = $request->session()->pull('url.intended');
+            if ($intended && str_starts_with(parse_url($intended, PHP_URL_PATH) ?? '', '/admin')) {
+                return redirect()->to($intended);
+            }
+
+            return redirect()->route('admin.dashboard');
         }
 
         // Non-approved users land on dashboard, where the `approved` middleware

@@ -1,82 +1,132 @@
 <x-layouts.dashboard title="Dashboard">
-    @unless($setup['complete'])
-        <div class="mb-6">
-            <x-card>
-                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <h3 class="text-sm font-semibold text-gray-900">Finish setting up your account</h3>
-                        <p class="mt-1 text-sm text-gray-500">Complete these steps before you can send campaigns.</p>
-                        <div class="mt-3 flex flex-wrap gap-2 text-xs">
-                            <span class="{{ $setup['profile'] ? 'badge-green' : 'badge-gray' }}">1. Profile</span>
-                            <span class="{{ $setup['smtp'] ? 'badge-green' : 'badge-gray' }}">2. SMTP</span>
-                            <span class="{{ $setup['tested'] ? 'badge-green' : 'badge-gray' }}">3. Test email</span>
-                        </div>
+    @php $smtpReady = $user->smtpReady(); @endphp
+
+    {{-- Setup checklist --}}
+    @unless ($setup['complete'])
+        <div class="acard" style="margin-bottom:18px;">
+            <div style="display:flex; flex-wrap:wrap; gap:16px; align-items:center; justify-content:space-between; padding:18px 20px;">
+                <div>
+                    <div class="acard-title">Finish setting up your account</div>
+                    <p style="margin-top:6px; color:var(--muted); font-size:.9rem;">Complete these steps before you can send campaigns.</p>
+                    <div style="display:flex; flex-wrap:wrap; gap:8px; margin-top:12px;">
+                        <span class="badge {{ $setup['profile'] ? 'badge-green' : 'badge-gray' }}">01 · Profile</span>
+                        <span class="badge {{ $setup['smtp'] ? 'badge-green' : 'badge-gray' }}">02 · SMTP</span>
+                        <span class="badge {{ $setup['tested'] ? 'badge-green' : 'badge-gray' }}">03 · Test email</span>
                     </div>
-                    <a href="{{ route('setup.index') }}" class="btn-primary shrink-0">Continue setup</a>
                 </div>
-            </x-card>
+                <a href="{{ route('setup.index') }}" class="abtn abtn-accent">Continue setup</a>
+            </div>
         </div>
     @endunless
 
-    <div class="grid grid-cols-2 gap-4 lg:grid-cols-3">
-        <x-stat-card label="Contacts" :value="number_format($stats['contacts'])" />
-        <x-stat-card label="Templates" :value="number_format($stats['templates'])" />
-        <x-stat-card label="Campaigns sent" :value="number_format($stats['campaigns_sent'])" />
-        <x-stat-card label="Emails attempted" :value="number_format($stats['attempted'])" />
-        <x-stat-card label="Sent" :value="number_format($stats['sent'])" tone="success" />
-        <x-stat-card label="Failed" :value="number_format($stats['failed'])" tone="danger" />
+    {{-- Stat strip --}}
+    @php
+        $rate = $stats['attempted'] > 0 ? (int) round($stats['sent'] / $stats['attempted'] * 100) : 0;
+        $segs = [
+            ['Contacts', $stats['contacts'], '', number_format($stats['templates']).' templates', route('contacts.index'), false],
+            ['Campaigns sent', $stats['campaigns_sent'], '', number_format($stats['sent']).' delivered', route('campaigns.index'), false],
+            ['Delivery rate', $rate, '%', number_format($stats['sent']).' / '.number_format($stats['attempted']).' sent', route('campaigns.index'), false],
+            ['Failed', $stats['failed'], '', 'across all sends', route('logs.index'), $stats['failed'] > 0],
+        ];
+    @endphp
+    <div class="stat-strip">
+        @foreach ($segs as [$label, $value, $suffix, $sub, $href, $amber])
+            <a href="{{ $href }}" class="stat-seg">
+                <div class="k">{{ $label }}</div>
+                <div class="v {{ $amber ? 'amber' : '' }}" data-count="{{ $value }}" data-suffix="{{ $suffix }}">0{{ $suffix }}</div>
+                <div class="sub">{{ $sub }}</div>
+            </a>
+        @endforeach
     </div>
 
-    <div class="mt-6 grid gap-6 lg:grid-cols-2">
-        <x-card title="Recent campaigns">
-            <x-slot:actions>
-                <a href="{{ route('campaigns.index') }}" class="btn-ghost btn-sm">View all</a>
-            </x-slot:actions>
-            @forelse($recentCampaigns as $campaign)
-                <div class="flex items-center justify-between border-b border-gray-100 py-3 last:border-0">
-                    <div>
-                        <a href="{{ route('campaigns.show', $campaign) }}" class="text-sm font-medium text-gray-900 hover:underline">{{ $campaign->name }}</a>
-                        <p class="text-xs text-gray-500">{{ $campaign->created_at->diffForHumans() }}</p>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <span class="text-xs text-gray-500">{{ $campaign->total_sent }} sent / {{ $campaign->total_failed }} failed</span>
-                        <x-status-badge :status="$campaign->status" />
-                    </div>
-                </div>
-            @empty
-                <p class="py-6 text-center text-sm text-gray-500">No campaigns yet.</p>
-            @endforelse
-        </x-card>
+    {{-- Main grid --}}
+    <div class="grid-2" style="margin-top:18px;">
 
-        <x-card title="SMTP connection">
-            @if($user->smtpReady())
-                <div class="flex items-center gap-3">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-green-100 text-green-600"><x-icon name="check-circle" class="h-5 w-5" /></span>
-                    <div>
-                        <p class="text-sm font-medium text-gray-900">Connected</p>
-                        <p class="text-xs text-gray-500">{{ $user->smtpSetting->summary() }}</p>
-                    </div>
+        {{-- Recent campaigns --}}
+        <div class="acard">
+            <div class="acard-head">
+                <span class="acard-title">Recent campaigns</span>
+                <a href="{{ route('campaigns.index') }}" class="alink">View all</a>
+            </div>
+
+            @if ($recentCampaigns->isEmpty())
+                <div class="empty-block">
+                    <p>No campaigns yet. Compose your first one.</p>
+                    <a href="{{ route('campaigns.index') }}" class="abtn abtn-accent">New campaign</a>
                 </div>
             @else
-                <div class="flex items-center gap-3">
-                    <span class="flex h-9 w-9 items-center justify-center rounded-full bg-amber-100 text-amber-600"><x-icon name="warning" class="h-5 w-5" /></span>
-                    <div>
-                        <p class="text-sm font-medium text-gray-900">Not connected</p>
-                        <p class="text-xs text-gray-500">Connect your SMTP account to start sending.</p>
-                    </div>
+                <div class="feed">
+                    <div class="feed-rail"></div>
+                    @foreach ($recentCampaigns as $c)
+                        <div class="feed-entry type-campaign">
+                            <span class="feed-node"></span>
+                            <a href="{{ route('campaigns.show', $c) }}" class="feed-head" style="text-decoration:none;">
+                                <span class="feed-time">{{ $c->created_at->diffForHumans(['short' => true]) }}</span>
+                                <span class="feed-label">[campaign]</span>
+                                <span class="feed-desc"><strong>{{ $c->name }}</strong> — {{ number_format((int) $c->total_sent) }} sent · {{ number_format((int) $c->total_failed) }} failed</span>
+                                <span class="feed-chev"><x-lucide name="chevron-right" /></span>
+                            </a>
+                        </div>
+                    @endforeach
                 </div>
-                <a href="{{ route('smtp.edit') }}" class="btn-secondary btn-sm mt-4">Set up SMTP</a>
             @endif
+        </div>
 
-            <h4 class="mt-6 mb-2 text-xs font-semibold uppercase tracking-wide text-gray-400">Recent sending errors</h4>
-            @forelse($recentErrors as $err)
-                <div class="border-b border-gray-100 py-2 text-xs last:border-0">
-                    <p class="font-medium text-gray-700">{{ $err->email }}</p>
-                    <p class="text-gray-500">{{ \Illuminate\Support\Str::limit($err->error_message, 80) }}</p>
+        {{-- SMTP + errors --}}
+        <div class="stack">
+            <div class="acard smtp-card {{ $smtpReady ? '' : 'failed' }}">
+                <div class="acard-head">
+                    <span class="acard-title">SMTP connection</span>
+                    <span class="acard-sub">{{ $smtpReady ? 'live' : 'not set up' }}</span>
                 </div>
-            @empty
-                <p class="py-3 text-xs text-gray-400">No sending errors.</p>
-            @endforelse
-        </x-card>
+                <div class="smtp-term">
+                    @if ($smtpReady)
+                        <div class="r"><span class="kk">status</span> <span class="ok">250 OK · connected</span></div>
+                        <div class="r"><span class="kk">config</span> <span class="vv">{{ $user->smtpSetting->summary() }}</span></div>
+                    @else
+                        <div class="r"><span class="bad">No SMTP account connected.</span></div>
+                        <div class="r"><span class="kk">next</span> <span class="vv">connect a server to start sending</span></div>
+                    @endif
+                </div>
+                <div class="smtp-foot">
+                    <span class="last {{ $smtpReady ? '' : 'bad' }}">{{ $smtpReady ? 'Ready to send' : 'Action required' }}</span>
+                    <a href="{{ route('smtp.edit') }}" class="abtn abtn-ghost abtn-sm">{{ $smtpReady ? 'Manage' : 'Set up SMTP' }}</a>
+                </div>
+            </div>
+
+            <div class="acard">
+                <div class="acard-head"><span class="acard-title">Recent sending errors</span></div>
+                @forelse ($recentErrors as $err)
+                    <div style="padding:12px 18px; border-bottom:1px solid var(--line);">
+                        <div class="mono" style="font-size:.78rem; color:var(--text);">{{ $err->email }}</div>
+                        <div class="mono" style="font-size:.72rem; color:var(--amber); margin-top:3px;">{{ \Illuminate\Support\Str::limit($err->error_message, 70) }}</div>
+                    </div>
+                @empty
+                    <p class="empty-line">No sending errors.</p>
+                @endforelse
+            </div>
+        </div>
     </div>
+
+    @push('scripts')
+        <script>
+            (function () {
+                const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                document.querySelectorAll('[data-count]').forEach((el) => {
+                    const target = parseFloat(el.getAttribute('data-count')) || 0;
+                    const suffix = el.getAttribute('data-suffix') || '';
+                    const fmt = (n) => Number(n).toLocaleString();
+                    if (reduce || target === 0) { el.textContent = fmt(target) + suffix; return; }
+                    let start = null;
+                    const step = (t) => {
+                        if (!start) start = t;
+                        const p = Math.min((t - start) / 600, 1);
+                        el.textContent = fmt(Math.round(target * (1 - Math.pow(1 - p, 3)))) + suffix;
+                        if (p < 1) requestAnimationFrame(step);
+                    };
+                    requestAnimationFrame(step);
+                });
+            })();
+        </script>
+    @endpush
 </x-layouts.dashboard>

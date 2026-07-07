@@ -1,8 +1,8 @@
 <x-layouts.dashboard title="Settings">
-    <x-page-header title="Profile &amp; settings" subtitle="Manage your account, sender details, and password." />
+    <x-page-header title="Profile & settings" subtitle="Manage your account, sender details, and password." />
 
     <div class="space-y-6">
-        <x-card title="Account &amp; sender details">
+        <x-card title="Account & sender details">
             <form method="POST" action="{{ route('profile.update') }}" class="space-y-4">
                 @csrf
                 @method('PATCH')

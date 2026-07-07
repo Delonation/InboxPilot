@@ -10,7 +10,6 @@ use App\Services\RecaptchaService;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Validation\Rules;
 use Illuminate\Validation\ValidationException;
@@ -71,8 +70,9 @@ class RegisteredUserController extends Controller
             event(new Registered($user));
         }
 
-        Auth::login($user);
-
-        return redirect()->route('status.pending');
+        // Don't auto-login: new accounts are pending admin approval. Show an
+        // in-place confirmation on the register page and let them log in when
+        // they're ready (login routes pending users to the waiting screen).
+        return redirect()->route('register')->with('registered', true);
     }
 }
