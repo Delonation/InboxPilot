@@ -8,6 +8,7 @@ docs/
 .env
 .env.*
 storage/
+public/storage
 bootstrap/cache/
 .deployignore
 .gitignore
