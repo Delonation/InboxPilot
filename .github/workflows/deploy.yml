@@ -1,0 +1,72 @@
+name: Deploy to Hostinger
+
+# Runs on every push to main. GitHub builds the app (Composer + Vite),
+# then uploads the finished files to Hostinger over FTPS. Your shared
+# host never needs Composer, Node, or SSH.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # lets you trigger a deploy manually from the Actions tab
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: true
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.2'
+          extensions: pdo_mysql, mbstring, openssl, fileinfo, curl, ctype, tokenizer, bcmath
+          coverage: none
+
+      - name: Install PHP dependencies (production)
+        run: composer install --no-dev --optimize-autoloader --no-interaction --prefer-dist
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Build front-end assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Deploy to Hostinger over FTPS
+        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+        with:
+          server: ${{ secrets.FTP_SERVER }}
+          username: ${{ secrets.FTP_USERNAME }}
+          password: ${{ secrets.FTP_PASSWORD }}
+          protocol: ftps
+          # The folder on Hostinger that holds the Laravel app.
+          # Point your domain's document root at this folder's /public.
+          server-dir: ${{ secrets.FTP_SERVER_DIR }}
+          # Never upload these. .env and storage live only on the server.
+          exclude: |
+            **/.git*
+            **/.git*/**
+            **/.github/**
+            **/node_modules/**
+            **/tests/**
+            **/.env
+            **/.env.*
+            **/.editorconfig
+            **/.styleci.yml
+            **/phpunit.xml
+            **/README.md
+            **/storage/logs/**
+            **/storage/framework/cache/**
+            **/storage/framework/sessions/**
+            **/storage/framework/views/**
+            **/storage/app/imports/**
