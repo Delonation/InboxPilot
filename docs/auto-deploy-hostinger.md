@@ -1,106 +1,99 @@
-# Automatic deployment: GitHub → Hostinger (no SSH required)
+# Automatic deployment: GitHub → Hostinger (over SSH)
 
 Every push to `main` triggers `.github/workflows/deploy.yml`, which:
 
 1. Installs Composer dependencies (`--no-dev`) on the GitHub runner.
 2. Builds the Vite/Tailwind assets (`npm run build`).
-3. Uploads the finished project to Hostinger over **FTPS** (incremental — only
-   changed files after the first run).
+3. `rsync`s the finished project to Hostinger over SSH (incremental).
+4. Runs `php artisan migrate --force` and rebuilds config/route/view caches.
 
-Your Hostinger plan needs **no** Composer, Node, or SSH. You only do the
-one-time setup below.
+Fully automatic — after the one-time setup below, you just `git push`.
 
 ---
 
 ## One-time setup
 
-### 1. Create an FTP account in hPanel
+### 1. Add the deploy key to Hostinger
 
-hPanel → **Files → FTP Accounts** → create an account (or use the existing one).
-Note the **FTP hostname**, **username**, and **password**. Hostinger FTPS uses
-port 21 with TLS (the action handles this via `protocol: ftps`).
+A dedicated keypair was generated for CI. Add the **public** key in
+hPanel → **Advanced → SSH Access → Add SSH key** (paste the `ssh-ed25519 …`
+line).
 
-### 2. Decide where the app lives, and set the document root
+### 2. Add GitHub secrets
 
-Upload the app into a folder such as `laravel/` in your account, and point the
-domain's **document root** at `laravel/public` (Laravel's real web root — this
-keeps `.env`, `vendor/`, and app code out of the public web).
+Repo → **Settings → Secrets and variables → Actions → New repository secret**:
 
-- hPanel → **Websites → (your site) → Dashboard → Advanced → Change site's root
-  directory** (wording varies) → set it to `laravel/public`.
-- If your plan can't change the document root, use the fallback in the last
-  section.
+| Secret name       | Value                                                            |
+|-------------------|-----------------------------------------------------------------|
+| `SSH_HOST`        | `46.202.182.229`                                                |
+| `SSH_PORT`        | `65002`                                                         |
+| `SSH_USERNAME`    | `u900210542`                                                    |
+| `SSH_PRIVATE_KEY` | the full `-----BEGIN OPENSSH PRIVATE KEY-----` block            |
+| `DEPLOY_PATH`     | absolute path to the app folder, e.g. `/home/u900210542/domains/inboxflight.dlnwebstudio.com/laravel` |
 
-### 3. Add the FTP credentials as GitHub secrets
+Find the exact `DEPLOY_PATH` by SSHing in once and running `pwd` inside the
+site's folder:
 
-In GitHub: **Settings → Secrets and variables → Actions → New repository secret**.
-Add these four:
+```bash
+ssh -p 65002 u900210542@46.202.182.229
+ls domains/                      # find the site folder
+# choose a private app dir alongside its public_html, e.g. .../laravel
+```
 
-| Secret name      | Value                                                    |
-|------------------|----------------------------------------------------------|
-| `FTP_SERVER`     | Your FTP hostname (e.g. `ftp.your-domain.com` or the IP) |
-| `FTP_USERNAME`   | The FTP account username                                 |
-| `FTP_PASSWORD`   | The FTP account password                                 |
-| `FTP_SERVER_DIR` | Deploy target path, e.g. `/laravel/` (trailing slash)    |
+### 3. Point the document root at `laravel/public`
 
-> `FTP_SERVER_DIR` is the path the FTP user sees. On Hostinger the main FTP
-> account usually lands in the home dir, so `/laravel/` (a sibling of
-> `public_html`) is typical. If your FTP account is jailed to `public_html`,
-> use `/laravel/` under it and set the doc root accordingly.
+The app deploys to `DEPLOY_PATH` (e.g. `.../laravel`). Set the subdomain's
+document root to that folder's **`/public`** so `.env`, `vendor/`, and app code
+stay out of the web root:
+
+hPanel → **Websites → (inboxflight…) → Advanced → Change site's root
+directory** → `.../laravel/public`.
 
 ### 4. Create `.env` on the server (once, by hand)
 
-`.env` is intentionally **never** uploaded. Via hPanel File Manager, create
-`laravel/.env` from `.env.example` and fill in:
+`.env` is intentionally **never** uploaded (see `.deployignore`). Create
+`DEPLOY_PATH/.env` from `.env.example` and set:
 
-- `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://your-domain.com`
-- `APP_KEY=` → generate one locally with `php artisan key:generate --show` and
-  paste the `base64:...` value. **Keep this key stable** — it decrypts stored
-  SMTP passwords.
-- `DB_*` → the MySQL database you created in hPanel.
+- `APP_ENV=production`, `APP_DEBUG=false`, `APP_URL=https://inboxflight.dlnwebstudio.com`
+- `APP_KEY=` → generate locally with `php artisan key:generate --show` and paste
+  the `base64:...` value. **Keep it stable** — it decrypts stored SMTP passwords.
+- `DB_*` → the MySQL database from hPanel → Databases.
 - `MAIL_*` → your system SMTP.
 
-### 5. First database migration
+### 5. Push
 
-FTP can't run `php artisan migrate`. Pick one:
+```bash
+git add .github/workflows/deploy.yml .deployignore docs/auto-deploy-hostinger.md
+git commit -m "Add automatic Hostinger deployment via GitHub Actions (SSH)"
+git push
+```
 
-- **phpMyAdmin (no SSH):** export your local schema
-  (`php artisan schema:dump` or a `mysqldump` of structure) and import it via
-  hPanel → Databases → phpMyAdmin.
-- **SSH (if your plan has it — Premium/Business do):**
-  `cd laravel && php artisan migrate --force`. Far simpler for future schema
-  changes; worth enabling under hPanel → Advanced → SSH Access.
+Watch the run under the repo's **Actions** tab. The first deploy uploads
+everything (including `vendor/`) so it takes a few minutes; later deploys sync
+only what changed and run migrations automatically.
 
 ### 6. First admin account
 
-Same story — needs a CLI. With SSH:
-`php artisan inboxpilot:create-admin`. Without SSH, insert an admin row via
-phpMyAdmin (role = `admin`, status = `approved`, `password` = a bcrypt hash).
+After the first successful deploy, SSH in once:
 
----
-
-## After setup
-
-Just work locally and `git push`. Watch the run under the repo's **Actions**
-tab. First deploy uploads everything (including `vendor/`, so it's slow — a few
-minutes); later deploys upload only what changed.
-
-Trigger a deploy without a code change from **Actions → Deploy to Hostinger →
-Run workflow** (that's the `workflow_dispatch` hook).
-
----
-
-## Fallback if you cannot change the document root
-
-If the domain must serve from `public_html`, deploy the app to a private
-`laravel/` folder (as above) and put a tiny `public_html/index.php` that boots
-it, plus copy Laravel's `public/.htaccess` into `public_html`. The
-`public_html/index.php` should require:
-
-```php
-require __DIR__.'/../laravel/vendor/autoload.php';
-$app = require_once __DIR__.'/../laravel/bootstrap/app.php';
+```bash
+ssh -p 65002 u900210542@46.202.182.229
+cd <DEPLOY_PATH>
+php artisan inboxpilot:create-admin
 ```
 
-and copy the built `public/build` into `public_html/build`. Ask and this can be
-scripted into the workflow as a second FTP step.
+---
+
+## Notes & gotchas
+
+- **PHP CLI version.** The `php` used over SSH must be 8.2+. If `php -v` shows an
+  older version, set the default in hPanel → Advanced → PHP Configuration, or
+  use the versioned binary (e.g. `/usr/bin/php8.2`) — tell me and I'll pin it in
+  the workflow.
+- **`rsync --delete`** removes server files that no longer exist in the repo, so
+  the server mirrors `main`. `.env` and `storage/` are excluded, so your
+  environment file, logs, and uploads are never touched.
+- **Manual deploy.** Trigger without a code change from Actions → Deploy to
+  Hostinger → **Run workflow** (the `workflow_dispatch` hook).
+- **Rotate the key** anytime by regenerating the pair, updating the Hostinger
+  key and the `SSH_PRIVATE_KEY` secret.

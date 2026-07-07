@@ -1,8 +1,8 @@
 name: Deploy to Hostinger
 
 # Runs on every push to main. GitHub builds the app (Composer + Vite),
-# then uploads the finished files to Hostinger over FTPS. Your shared
-# host never needs Composer, Node, or SSH.
+# rsyncs it to Hostinger over SSH, then runs migrations and rebuilds caches.
+# Fully automatic — no manual steps after the one-time setup.
 
 on:
   push:
@@ -42,31 +42,34 @@ jobs:
           npm ci
           npm run build
 
-      - name: Deploy to Hostinger over FTPS
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.5
+      - name: Start SSH agent
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftps
-          # The folder on Hostinger that holds the Laravel app.
-          # Point your domain's document root at this folder's /public.
-          server-dir: ${{ secrets.FTP_SERVER_DIR }}
-          # Never upload these. .env and storage live only on the server.
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/.github/**
-            **/node_modules/**
-            **/tests/**
-            **/.env
-            **/.env.*
-            **/.editorconfig
-            **/.styleci.yml
-            **/phpunit.xml
-            **/README.md
-            **/storage/logs/**
-            **/storage/framework/cache/**
-            **/storage/framework/sessions/**
-            **/storage/framework/views/**
-            **/storage/app/imports/**
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Trust the Hostinger host key
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null
+
+      - name: Upload files with rsync
+        run: |
+          rsync -az --delete \
+            -e "ssh -p ${{ secrets.SSH_PORT }}" \
+            --exclude-from='.deployignore' \
+            ./ "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}:${{ secrets.DEPLOY_PATH }}"
+
+      - name: Run migrations and rebuild caches
+        run: |
+          ssh -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_USERNAME }}@${{ secrets.SSH_HOST }}" bash -s <<'EOF'
+            set -e
+            cd "${{ secrets.DEPLOY_PATH }}"
+            mkdir -p storage/framework/cache storage/framework/sessions storage/framework/views \
+                     storage/logs storage/app/public bootstrap/cache
+            chmod -R 775 storage bootstrap/cache || true
+            php artisan migrate --force
+            php artisan storage:link || true
+            php artisan config:cache
+            php artisan route:cache
+            php artisan view:cache
+          EOF

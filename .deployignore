@@ -1,0 +1,18 @@
+# Files rsync must NOT push to the server (patterns are relative to repo root).
+# .env and storage live only on the server and must never be overwritten.
+.git/
+.github/
+node_modules/
+tests/
+docs/
+.env
+.env.*
+storage/
+bootstrap/cache/
+.deployignore
+.gitignore
+.gitattributes
+.editorconfig
+.styleci.yml
+phpunit.xml
+README.md
